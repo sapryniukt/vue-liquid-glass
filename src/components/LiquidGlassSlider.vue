@@ -36,8 +36,21 @@ const props = withDefaults(
     trackFilterSpecularSaturation?: number;
     // Thumb filter tuning
     thumbFilterBlur?: number;
+    thumbFilterScaleRatioBoost?: number;
     thumbFilterSpecularOpacity?: number;
     thumbFilterSpecularSaturation?: number;
+    thumbFilterSpecularSaturationBoost?: number;
+    // Optics tuning
+    trackCurvatureBoost?: number;
+    thumbCurvatureBoost?: number;
+    trackRefractiveIndexBase?: number;
+    trackRefractiveIndexHoverBoost?: number;
+    thumbRefractiveIndexBase?: number;
+    thumbRefractiveIndexHoverBoost?: number;
+    trackScaleRatioBoost?: number;
+    trackSpecularSaturationBoost?: number;
+    // Misc
+    initialContainerWidth?: number;
     hoverLight?: boolean;
     hoverLightOptions?: GlassHoverOptions;
   }>(),
@@ -59,8 +72,19 @@ const props = withDefaults(
     trackFilterSpecularOpacity: 0.38,
     trackFilterSpecularSaturation: 7,
     thumbFilterBlur: 0,
+    thumbFilterScaleRatioBoost: 1.55,
     thumbFilterSpecularOpacity: 0.4,
     thumbFilterSpecularSaturation: 7,
+    thumbFilterSpecularSaturationBoost: 4,
+    trackCurvatureBoost: 1.32,
+    thumbCurvatureBoost: 1.4,
+    trackRefractiveIndexBase: 1.62,
+    trackRefractiveIndexHoverBoost: 0.18,
+    thumbRefractiveIndexBase: 1.65,
+    thumbRefractiveIndexHoverBoost: 0.12,
+    trackScaleRatioBoost: 1.45,
+    trackSpecularSaturationBoost: 3,
+    initialContainerWidth: 300,
     hoverLight: true,
   },
 );
@@ -98,7 +122,7 @@ const sizePresets = {
 
 const containerRef = ref<HTMLElement | null>(null);
 const trackRef = ref<HTMLElement | null>(null);
-const containerWidth = ref(300);
+const containerWidth = ref(props.initialContainerWidth);
 
 const dimensions = computed(() => sizePresets[props.size]);
 const sliderWidth = computed(() => containerWidth.value);
@@ -227,13 +251,21 @@ const fillWidth = computed(() =>
   ),
 );
 const trackRefractiveIndex = computed(
-  () => 1.62 + sliderHoverProgress.value * 0.18,
+  () =>
+    props.trackRefractiveIndexBase +
+    sliderHoverProgress.value * props.trackRefractiveIndexHoverBoost,
 );
 const thumbRefractiveIndex = computed(
-  () => 1.72 + sliderHoverProgress.value * 0.12,
+  () =>
+    props.thumbRefractiveIndexBase +
+    sliderHoverProgress.value * props.thumbRefractiveIndexHoverBoost,
 );
-const trackScaleRatioBoosted = computed(() => props.trackFilterScaleRatio * 1.45);
-const thumbScaleRatioBoosted = computed(() => scaleRatio.value * 1.55);
+const trackScaleRatioBoosted = computed(
+  () => props.trackFilterScaleRatio * props.trackScaleRatioBoost,
+);
+const thumbScaleRatioBoosted = computed(
+  () => scaleRatio.value * props.thumbFilterScaleRatioBoost,
+);
 const trackHorizontalInset = computed(
   () => (thumbWidth.value * (1 - props.restScale)) / 2,
 );
@@ -314,7 +346,7 @@ const fillMaskStyle = computed<CSSProperties>(() => ({
         :width="trackWidth"
         :height="sliderHeight"
         :radius="sliderHeight / 2"
-        :curvature-boost="1.32"
+        :curvature-boost="trackCurvatureBoost"
         :bezel-width="trackFilterBezelWidth"
         :glass-thickness="trackFilterGlassThickness"
         :refractive-index="trackRefractiveIndex"
@@ -323,7 +355,7 @@ const fillMaskStyle = computed<CSSProperties>(() => ({
         :blur="trackFilterBlur"
         :scale-ratio="trackScaleRatioBoosted"
         :specular-opacity="trackFilterSpecularOpacity"
-        :specular-saturation="trackFilterSpecularSaturation + 3"
+        :specular-saturation="trackFilterSpecularSaturation + trackSpecularSaturationBoost"
       />
 
       <div :style="trackGlassStyle" />
@@ -346,7 +378,7 @@ const fillMaskStyle = computed<CSSProperties>(() => ({
       :width="thumbWidth"
       :height="thumbHeight"
       :radius="thumbRadius"
-      :curvature-boost="1.4"
+      :curvature-boost="thumbCurvatureBoost"
       :bezel-width="bezelWidth"
       :glass-thickness="glassThickness"
       :refractive-index="thumbRefractiveIndex"
@@ -355,7 +387,7 @@ const fillMaskStyle = computed<CSSProperties>(() => ({
       :blur="thumbFilterBlur"
       :scale-ratio="thumbScaleRatioBoosted"
       :specular-opacity="thumbFilterSpecularOpacity"
-      :specular-saturation="thumbFilterSpecularSaturation + 4"
+      :specular-saturation="thumbFilterSpecularSaturation + thumbFilterSpecularSaturationBoost"
     />
 
     <!-- Thumb -->
