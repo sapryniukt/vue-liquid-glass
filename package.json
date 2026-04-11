@@ -1,6 +1,6 @@
 {
   "name": "@sapryniukt/vue-liquid-glass",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "type": "module",
   "description": "Liquid Glass effect core library for Vue 3 — physics-based refraction, specular highlights, and ready-to-use glass components",
   "main": "./dist/liquid-glass-core.js",
