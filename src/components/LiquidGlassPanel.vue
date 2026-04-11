@@ -45,6 +45,7 @@ interface Props {
   disabled?: boolean;
   hoverLight?: boolean;
   hoverLightOptions?: GlassHoverOptions;
+  class?: any;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -131,9 +132,6 @@ const hoverRefractiveIndex = computed(
 
 const innerInset = computed(() => Math.max(props.gradientBlurSize - 20, 20));
 const rootStyle = computed<CSSProperties>(() => ({
-  position: "relative",
-  width: "100%",
-  height: "100%",
   overflow: "hidden",
   borderRadius: `${radius.value}px`,
   border: `${props.borderWidth}px solid ${props.borderColor}`,
@@ -178,7 +176,7 @@ const contentStyle = computed<CSSProperties>(() => ({
 </script>
 
 <template>
-  <div ref="containerRef" :style="rootStyle">
+  <div ref="containerRef" :class="['lg-panel-root', props.class]" :style="rootStyle">
     <!-- SVG filter definition -->
     <LiquidGlassFilter
       v-if="hasMeasuredPanel"
@@ -224,3 +222,11 @@ const contentStyle = computed<CSSProperties>(() => ({
     </div>
   </div>
 </template>
+
+<style scoped>
+.lg-panel-root {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+</style>
