@@ -46,6 +46,7 @@ interface Props {
   disabled?: boolean;
   hoverLight?: boolean;
   hoverLightOptions?: GlassHoverOptions;
+  scrollFast?: boolean;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -76,6 +77,7 @@ const props = withDefaults(defineProps<Props>(), {
   hoverRefractiveBoost: 0.12,
   disabled: false,
   hoverLight: false,
+  scrollFast: true,
 });
 
 const containerRef = ref<HTMLElement | null>(null);
@@ -202,6 +204,7 @@ const contentStyle = computed<CSSProperties>(() => ({
       :specular-angle="specularAngle"
       :magnify="magnify"
       :magnifying-scale="magnifyingScale"
+      :scroll-fast="scrollFast"
     />
 
     <!-- Glass background with refraction filter -->

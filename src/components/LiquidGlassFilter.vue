@@ -15,6 +15,7 @@ import { calculateSpecularMap } from '../lib/specular'
 import { calculateMagnifyingMap } from '../lib/magnifyingDisplacement'
 import { CONVEX, CONVEX_CIRCLE, CONCAVE, LIP } from '../lib/surfaceEquations'
 import { cachedImageDataUrl } from '../lib/utils'
+import { useDocumentScrolling } from '../composables/useDocumentScrolling'
 
 interface Props {
   id: string
@@ -40,6 +41,8 @@ interface Props {
   edgeChromatic?: boolean
   edgeChromaticStrength?: number
   edgeChromaticShift?: number
+  /** When false, scroll keeps the full lens. Header glass uses this. */
+  scrollFast?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -64,12 +67,15 @@ const props = withDefaults(defineProps<Props>(), {
   edgeChromatic: false,
   edgeChromaticStrength: 0.72,
   edgeChromaticShift: 0.5,
+  scrollFast: true,
 })
 
 const displacementMapUrl = ref('')
+const scrollDisplacementMapUrl = ref('')
 const specularMapUrl = ref('')
 const magnifyingMapUrl = ref('')
 const maxDisplacement = ref(0)
+const scrolling = useDocumentScrolling()
 
 const MIN_DIMENSION = 1
 const LARGE_WIDTH_DELTA = 8
@@ -170,6 +176,8 @@ function regenerateAssets() {
     bakedProfile = precomputedMap
     bakedGeometry = geometry
     maxDisplacement.value = displacementScaleMax(precomputedMap)
+    scrollDisplacementMapUrl.value = ''
+    scheduleScrollMap(width, height, bezel, precomputedMap)
   }
 
   const specKey = specularKey(width, height, bezel)
@@ -196,6 +204,40 @@ function regenerateAssets() {
   hasGeneratedOnce = true
   lastGeneratedWidth = width
   lastGeneratedHeight = height
+}
+
+function scheduleScrollMap(
+  width: number,
+  height: number,
+  bezel: number,
+  precomputedMap: number[],
+) {
+  const quality = Math.max(0.5, props.quality / 2)
+  const geometry = geometryKey(width, height, bezel)
+  const key = `disp-scroll|${geometry}|${props.refractiveIndex}|${quality}`
+  const build = () => {
+    if (props.shape && props.shape !== 'circle') {
+      return calculateDisplacementMapWithShape(
+        width, height, width, height,
+        bezel, DISPLACEMENT_NORMALIZER, precomputedMap,
+        props.shape, props.cornerRadius, props.squircleExponent, quality,
+      )
+    }
+    return calculateDisplacementMap2D(
+      width, height, width, height,
+      props.radius, bezel, DISPLACEMENT_NORMALIZER,
+      precomputedMap, quality,
+    )
+  }
+  const apply = () => {
+    if (bakedGeometry !== geometry) return
+    scrollDisplacementMapUrl.value = cachedImageDataUrl(key, build)
+  }
+  if (typeof requestIdleCallback !== 'undefined') {
+    requestIdleCallback(apply, { timeout: 700 })
+  } else {
+    setTimeout(apply, 180)
+  }
 }
 
 function debouncedRegenerate() {
@@ -262,6 +304,18 @@ onUnmounted(() => {
   clearRegenerateTimeout()
 })
 
+const scrollLite = computed(() => props.scrollFast && scrolling.value)
+const activeDisplacementMapUrl = computed(() =>
+  scrollLite.value && scrollDisplacementMapUrl.value
+    ? scrollDisplacementMapUrl.value
+    : displacementMapUrl.value,
+)
+/** shortcut: full blur + specular return when scroll stops; the lens stays on. */
+const liveBlur = computed(() =>
+  scrollLite.value ? Math.min(props.blur, 2) : props.blur,
+)
+const showSpecular = computed(() => !scrollLite.value && !!specularMapUrl.value)
+
 const scale = computed(() => maxDisplacement.value * props.scaleRatio)
 const scaleRed = computed(() => scale.value * (1 + props.edgeChromaticShift))
 const scaleBlue = computed(() => scale.value * (1 - props.edgeChromaticShift))
@@ -293,14 +347,14 @@ const specularSaturationValue = computed(() => props.specularSaturation.toString
         <!-- Gaussian blur -->
         <feGaussianBlur
           :in="magnify ? 'magnified_source' : 'SourceGraphic'"
-          :stdDeviation="blur"
+          :stdDeviation="liveBlur"
           result="blurred_source"
         />
 
         <!-- Main refraction displacement -->
         <feImage
-          v-if="displacementMapUrl"
-          :href="displacementMapUrl"
+          v-if="activeDisplacementMapUrl"
+          :href="activeDisplacementMapUrl"
           x="0" y="0"
           :width="width" :height="height"
           result="displacement_map"
@@ -376,34 +430,36 @@ const specularSaturationValue = computed(() => props.specularSaturation.toString
 
         <!-- Specular highlight layer -->
         <feImage
-          v-if="specularMapUrl"
+          v-if="showSpecular"
           :href="specularMapUrl"
           x="0" y="0"
           :width="width" :height="height"
           result="specular_layer"
         />
-        <feComposite
-          in="displaced_saturated"
-          in2="specular_layer"
-          operator="in"
-          result="specular_saturated"
-        />
-        <feComponentTransfer in="specular_layer" result="specular_faded">
-          <feFuncA type="linear" :slope="specularOpacity" />
-        </feComponentTransfer>
+        <template v-if="showSpecular">
+          <feComposite
+            in="displaced_saturated"
+            in2="specular_layer"
+            operator="in"
+            result="specular_saturated"
+          />
+          <feComponentTransfer in="specular_layer" result="specular_faded">
+            <feFuncA type="linear" :slope="specularOpacity" />
+          </feComponentTransfer>
 
-        <!-- Blend refraction + specular -->
-        <feBlend
-          in="specular_saturated"
-          in2="displaced"
-          mode="normal"
-          result="withSaturation"
-        />
-        <feBlend
-          in="specular_faded"
-          in2="withSaturation"
-          mode="normal"
-        />
+          <!-- Blend refraction + specular -->
+          <feBlend
+            in="specular_saturated"
+            in2="displaced"
+            mode="normal"
+            result="withSaturation"
+          />
+          <feBlend
+            in="specular_faded"
+            in2="withSaturation"
+            mode="normal"
+          />
+        </template>
       </filter>
     </defs>
   </svg>

@@ -44,6 +44,7 @@ const props = withDefaults(
     borderStyle?: string;
     hoverLight?: boolean;
     hoverLightOptions?: GlassHoverOptions;
+    scrollFast?: boolean;
   }>(),
   {
     label: "Liquid Glass Button",
@@ -75,6 +76,7 @@ const props = withDefaults(
       "var(--lg-button-shadow-pressed, 0 4px 24px rgba(0,0,0,0.1))",
     borderStyle: "1px solid",
     hoverLight: true,
+    scrollFast: true,
   },
 );
 
@@ -218,6 +220,7 @@ const handleClick = (event: MouseEvent) => {
       :scale-ratio="resolvedScaleRatio"
       :specular-opacity="resolvedSpecularOpacity"
       :specular-saturation="resolvedSpecularSaturation"
+      :scroll-fast="scrollFast"
     />
 
     <button
