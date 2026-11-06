@@ -10,11 +10,17 @@ import {
   type CSSProperties,
 } from 'vue'
 import type { BezelType, ShapeType, GlassConfig, GlassFilterAssets } from '../types'
-import { calculateDisplacementMap, calculateDisplacementMap2D, calculateDisplacementMapWithShape } from '../lib/displacementMap'
+import {
+  calculateDisplacementMap,
+  calculateDisplacementMap2D,
+  calculateDisplacementMapWithShape,
+  DISPLACEMENT_NORMALIZER,
+  displacementScaleMax,
+} from '../lib/displacementMap'
 import { calculateSpecularMap } from '../lib/specular'
 import { calculateMagnifyingMap } from '../lib/magnifyingDisplacement'
 import { CONVEX, CONVEX_CIRCLE, CONCAVE, LIP } from '../lib/surfaceEquations'
-import { imageDataToDataUrl } from '../lib/utils'
+import { cachedImageDataUrl } from '../lib/utils'
 
 export interface UseLiquidGlassOptions {
   width?: Ref<number> | number
@@ -103,34 +109,38 @@ export function useLiquidGlass(
       refractiveIndex
     )
 
-    assets.maxDisplacement = Math.max(...precomputedMap.map(x => Math.abs(x))) || 1
+    assets.maxDisplacement = displacementScaleMax(precomputedMap)
 
-    let displacementImageData: ImageData
-    if (shape && shape !== 'circle') {
-      displacementImageData = calculateDisplacementMapWithShape(
+    const geometryKey = [
+      w, h, radius, bezelWidth, glassThickness, refractiveIndex, bezelType,
+      shape, cornerRadius, squircleExponent, quality,
+    ].join('|')
+
+    assets.displacementMapUrl = cachedImageDataUrl(`disp|${geometryKey}`, () => {
+      if (shape && shape !== 'circle') {
+        return calculateDisplacementMapWithShape(
+          w, h, w, h,
+          bezelWidth, DISPLACEMENT_NORMALIZER, precomputedMap,
+          shape, cornerRadius, squircleExponent, quality
+        )
+      }
+      return calculateDisplacementMap2D(
         w, h, w, h,
-        bezelWidth, 100, precomputedMap,
-        shape, cornerRadius, squircleExponent, quality
-      )
-    } else {
-      displacementImageData = calculateDisplacementMap2D(
-        w, h, w, h,
-        radius, bezelWidth, 100,
+        radius, bezelWidth, DISPLACEMENT_NORMALIZER,
         precomputedMap, quality
       )
-    }
+    })
 
-    assets.displacementMapUrl = imageDataToDataUrl(displacementImageData)
-
-    const specularImageData = calculateSpecularMap(
-      w, h, radius, bezelWidth,
-      options.specularAngle, quality
+    assets.specularMapUrl = cachedImageDataUrl(
+      `spec|${w}|${h}|${radius}|${bezelWidth}|${options.specularAngle ?? ''}|${quality}`,
+      () => calculateSpecularMap(w, h, radius, bezelWidth, options.specularAngle, quality),
     )
-    assets.specularMapUrl = imageDataToDataUrl(specularImageData)
 
     if (options.magnify) {
-      const magnifyingImageData = calculateMagnifyingMap(w, h, quality)
-      assets.magnifyingMapUrl = imageDataToDataUrl(magnifyingImageData)
+      assets.magnifyingMapUrl = cachedImageDataUrl(
+        `mag|${w}|${h}|${quality}`,
+        () => calculateMagnifyingMap(w, h, quality),
+      )
     }
   }
 

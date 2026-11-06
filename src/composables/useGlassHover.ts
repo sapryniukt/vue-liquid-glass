@@ -46,7 +46,7 @@ export function useGlassHover(
       smoothY.value = rawY.value
       smoothOpacity.value = targetOpacity
       rafId = null
-      if (!isHovering.value) return
+      return
     }
 
     rafId = requestAnimationFrame(tick)

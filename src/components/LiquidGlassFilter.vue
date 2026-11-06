@@ -5,11 +5,16 @@ import {
   calculateDisplacementMap,
   calculateDisplacementMap2D,
   calculateDisplacementMapWithShape,
+  DISPLACEMENT_NORMALIZER,
+  displacementScaleMax,
+  peakDisplacement,
+  reusedDisplacementErrorPx,
+  reusedDisplacementMax,
 } from '../lib/displacementMap'
 import { calculateSpecularMap } from '../lib/specular'
 import { calculateMagnifyingMap } from '../lib/magnifyingDisplacement'
 import { CONVEX, CONVEX_CIRCLE, CONCAVE, LIP } from '../lib/surfaceEquations'
-import { imageDataToDataUrl } from '../lib/utils'
+import { cachedImageDataUrl } from '../lib/utils'
 
 interface Props {
   id: string
@@ -70,11 +75,17 @@ const MIN_DIMENSION = 1
 const LARGE_WIDTH_DELTA = 8
 const LARGE_HEIGHT_DELTA = 4
 const REGENERATE_DEBOUNCE_MS = 16
+// Reusing the bitmap below this is invisible, and swapping it refilters the backdrop.
+const DISPLACEMENT_ERROR_PX = 0.35
 
 let regenerateTimeout: ReturnType<typeof setTimeout> | null = null
 let hasGeneratedOnce = false
 let lastGeneratedWidth = 0
 let lastGeneratedHeight = 0
+let bakedGeometry = ''
+let bakedSpecular = ''
+let bakedMagnify = ''
+let bakedProfile: number[] | null = null
 
 const safeWidth = computed(() => Math.max(MIN_DIMENSION, props.width))
 const safeHeight = computed(() => Math.max(MIN_DIMENSION, props.height))
@@ -95,55 +106,91 @@ function getSurfaceFn(bezelType: BezelType) {
   }
 }
 
+function effectiveBezel(width: number, height: number) {
+  const maxBezelByGeometry = Math.max(2, Math.min(width, height) / 2 - 1)
+  return Math.min(maxBezelByGeometry, Math.max(1, props.bezelWidth * props.curvatureBoost))
+}
+
+function geometryKey(width: number, height: number, bezel: number) {
+  return [
+    width, height, props.radius, bezel, props.glassThickness, props.bezelType,
+    props.shape, props.cornerRadius, props.squircleExponent, props.quality,
+  ].join('|')
+}
+
+function specularKey(width: number, height: number, bezel: number) {
+  return [width, height, props.radius, bezel, props.specularAngle ?? '', props.quality].join('|')
+}
+
+function magnifyKey(width: number, height: number) {
+  return props.magnify ? [width, height, props.quality].join('|') : ''
+}
+
+function worstScaleRatio() {
+  const chroma = props.edgeChromatic ? 1 + Math.abs(props.edgeChromaticShift) : 1
+  return props.scaleRatio * chroma
+}
+
 function regenerateAssets() {
   const surfaceFn = getSurfaceFn(props.bezelType)
   const width = safeWidth.value
   const height = safeHeight.value
-  const maxBezelByGeometry = Math.max(2, Math.min(width, height) / 2 - 1)
-  const effectiveBezelWidth = Math.min(
-    maxBezelByGeometry,
-    Math.max(1, props.bezelWidth * props.curvatureBoost)
-  )
+  const bezel = effectiveBezel(width, height)
 
   const precomputedMap = calculateDisplacementMap(
     props.glassThickness,
-    effectiveBezelWidth,
+    bezel,
     surfaceFn,
     props.refractiveIndex
   )
 
-  maxDisplacement.value = Math.max(...precomputedMap.map(x => Math.abs(x))) || 1
+  const geometry = geometryKey(width, height, bezel)
+  const reuseProfile = bakedProfile
+    && geometry === bakedGeometry
+    && reusedDisplacementErrorPx(bakedProfile, precomputedMap, worstScaleRatio()) <= DISPLACEMENT_ERROR_PX
 
-  let displacementImageData: ImageData
-
-  if (props.shape && props.shape !== 'circle') {
-    displacementImageData = calculateDisplacementMapWithShape(
-      width, height, width, height,
-      effectiveBezelWidth, 100, precomputedMap,
-      props.shape, props.cornerRadius, props.squircleExponent, props.quality
-    )
+  if (reuseProfile && bakedProfile) {
+    maxDisplacement.value = reusedDisplacementMax(peakDisplacement(bakedProfile), precomputedMap)
   } else {
-    displacementImageData = calculateDisplacementMap2D(
-      width, height, width, height,
-      props.radius, effectiveBezelWidth, 100,
-      precomputedMap, props.quality
-    )
+    const displacementKey = `disp|${geometry}|${props.refractiveIndex}`
+    displacementMapUrl.value = cachedImageDataUrl(displacementKey, () => {
+      if (props.shape && props.shape !== 'circle') {
+        return calculateDisplacementMapWithShape(
+          width, height, width, height,
+          bezel, DISPLACEMENT_NORMALIZER, precomputedMap,
+          props.shape, props.cornerRadius, props.squircleExponent, props.quality
+        )
+      }
+      return calculateDisplacementMap2D(
+        width, height, width, height,
+        props.radius, bezel, DISPLACEMENT_NORMALIZER,
+        precomputedMap, props.quality
+      )
+    })
+    bakedProfile = precomputedMap
+    bakedGeometry = geometry
+    maxDisplacement.value = displacementScaleMax(precomputedMap)
   }
 
-  displacementMapUrl.value = imageDataToDataUrl(displacementImageData)
+  const specKey = specularKey(width, height, bezel)
+  if (specKey !== bakedSpecular) {
+    specularMapUrl.value = cachedImageDataUrl(`spec|${specKey}`, () => calculateSpecularMap(
+      width, height,
+      props.radius, bezel,
+      props.specularAngle, props.quality
+    ))
+    bakedSpecular = specKey
+  }
 
-  const specularImageData = calculateSpecularMap(
-    width, height,
-    props.radius, effectiveBezelWidth,
-    props.specularAngle, props.quality
-  )
-  specularMapUrl.value = imageDataToDataUrl(specularImageData)
-
-  if (props.magnify) {
-    const magnifyingImageData = calculateMagnifyingMap(
+  const magKey = magnifyKey(width, height)
+  if (!props.magnify) {
+    if (magnifyingMapUrl.value) magnifyingMapUrl.value = ''
+    bakedMagnify = ''
+  } else if (magKey !== bakedMagnify) {
+    magnifyingMapUrl.value = cachedImageDataUrl(`mag|${magKey}`, () => calculateMagnifyingMap(
       width, height, props.quality
-    )
-    magnifyingMapUrl.value = imageDataToDataUrl(magnifyingImageData)
+    ))
+    bakedMagnify = magKey
   }
 
   hasGeneratedOnce = true
@@ -172,16 +219,42 @@ function debouncedRegenerate() {
   regenerateTimeout = setTimeout(regenerateAssets, REGENERATE_DEBOUNCE_MS)
 }
 
+function onFilterDeps() {
+  const width = safeWidth.value
+  const height = safeHeight.value
+  const bezel = effectiveBezel(width, height)
+  if (
+    hasGeneratedOnce &&
+    bakedProfile &&
+    geometryKey(width, height, bezel) === bakedGeometry &&
+    specularKey(width, height, bezel) === bakedSpecular &&
+    magnifyKey(width, height) === bakedMagnify
+  ) {
+    const profile = calculateDisplacementMap(
+      props.glassThickness,
+      bezel,
+      getSurfaceFn(props.bezelType),
+      props.refractiveIndex,
+    )
+    if (reusedDisplacementErrorPx(bakedProfile, profile, worstScaleRatio()) <= DISPLACEMENT_ERROR_PX) {
+      clearRegenerateTimeout()
+      maxDisplacement.value = reusedDisplacementMax(peakDisplacement(bakedProfile), profile)
+      return
+    }
+  }
+  debouncedRegenerate()
+}
+
 const filterDeps = () => [
   safeWidth.value, safeHeight.value, props.radius,
   props.bezelWidth, props.curvatureBoost, props.glassThickness, props.refractiveIndex,
-  props.bezelType, props.magnify,
+  props.bezelType, props.magnify, props.specularAngle,
   props.shape, props.cornerRadius, props.squircleExponent, props.quality,
 ]
 
 watch(
   filterDeps,
-  debouncedRegenerate,
+  onFilterDeps,
   { immediate: true, deep: true }
 )
 

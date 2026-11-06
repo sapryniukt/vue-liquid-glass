@@ -280,3 +280,56 @@ export function calculateDisplacementMapWithShape(
   }
   return imageData
 }
+
+/** Channel normalizer used when the displacement bitmap is encoded. */
+export const DISPLACEMENT_NORMALIZER = 100
+
+/** Signed profile sample with the largest magnitude. */
+export function peakDisplacement(profile: number[]): number {
+  let peak = 0
+  for (let i = 0; i < profile.length; i++) {
+    const value = profile[i]
+    if (Math.abs(value) > Math.abs(peak)) peak = value
+  }
+  return peak
+}
+
+/** feDisplacementMap scale factor for a profile. A flat profile stays at 1. */
+export function displacementScaleMax(profile: number[]): number {
+  return Math.abs(peakDisplacement(profile)) || 1
+}
+
+function storedChannelOffset(sample: number): number {
+  return (128 + (sample / DISPLACEMENT_NORMALIZER) * 127) / 255 - 0.5
+}
+
+/**
+ * Scale that keeps the peak refraction of `nextProfile` while the bitmap
+ * still stores `bakedPeak`.
+ */
+export function reusedDisplacementMax(bakedPeak: number, nextProfile: number[]): number {
+  const nextScale = displacementScaleMax(nextProfile)
+  const bakedOffset = storedChannelOffset(bakedPeak)
+  if (bakedOffset === 0) return nextScale
+  return nextScale * storedChannelOffset(peakDisplacement(nextProfile)) / bakedOffset
+}
+
+/** Worst-case CSS-pixel error of reusing a baked profile at `scaleRatio`. */
+export function reusedDisplacementErrorPx(
+  baked: number[],
+  next: number[],
+  scaleRatio: number,
+): number {
+  if (baked.length !== next.length || baked.length === 0) return Number.POSITIVE_INFINITY
+  const scale = reusedDisplacementMax(peakDisplacement(baked), next)
+  const nextScale = displacementScaleMax(next)
+  let err = 0
+  const ratio = Math.abs(scaleRatio)
+  for (let i = 0; i < baked.length; i++) {
+    const fresh = nextScale * storedChannelOffset(next[i])
+    const approx = scale * storedChannelOffset(baked[i])
+    const delta = Math.abs(fresh - approx) * ratio
+    if (delta > err) err = delta
+  }
+  return err
+}
