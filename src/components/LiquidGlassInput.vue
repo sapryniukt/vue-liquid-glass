@@ -19,6 +19,7 @@ const props = withDefaults(
     inputRefractiveIndex?: number;
     hoverLight?: boolean;
     hoverLightOptions?: GlassHoverOptions;
+    scrollFast?: boolean;
   }>(),
   {
     modelValue: "",
@@ -34,6 +35,7 @@ const props = withDefaults(
     inputSpecularSaturation: 4,
     inputRefractiveIndex: 1.45,
     hoverLight: true,
+    scrollFast: true,
   },
 );
 
@@ -190,6 +192,7 @@ defineExpose({ focus: () => inputRef.value?.focus(), blur: () => inputRef.value?
         :scale-ratio="inputFilterScaleRatio"
         :specular-opacity="inputSpecularOpacity"
         :specular-saturation="inputSpecularSaturation"
+        :scroll-fast="scrollFast"
       />
 
       <div :style="glassStyle" />

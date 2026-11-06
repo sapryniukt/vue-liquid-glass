@@ -45,6 +45,7 @@ const props = withDefaults(
     hoverLight?: boolean;
     hoverLightOptions?: GlassHoverOptions;
     scrollFast?: boolean;
+    ariaLabel?: string;
   }>(),
   {
     label: "Liquid Glass Button",
@@ -227,6 +228,7 @@ const handleClick = (event: MouseEvent) => {
       ref="buttonRef"
       type="button"
       :disabled="disabled"
+      :aria-label="ariaLabel"
       :style="buttonStyle"
       @pointerdown="handlePointerDown"
       @pointerup="handlePointerUp"
