@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch, type CSSProperties } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch, useId, type CSSProperties } from "vue";
 import { useGlassHover, type GlassHoverOptions } from "../composables/useGlassHover";
 import LiquidGlassFilter from "./LiquidGlassFilter.vue";
 
@@ -98,7 +98,7 @@ const borderRadius = computed(() =>
   Math.min(props.radius, Math.min(measuredWidth.value || props.radius * 2, measuredHeight.value || props.radius * 2) / 2),
 );
 
-const filterId = `lg-textarea-input-${Math.random().toString(36).substring(2, 9)}`;
+const filterId = `lg-textarea-input-${useId()}`;
 const glassReady = computed(() => measuredWidth.value > 0 && measuredHeight.value > 0);
 
 const rootStyle = computed<CSSProperties>(() => ({

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, type CSSProperties } from "vue";
+import { computed, ref, useId, type CSSProperties } from "vue";
 import {
   useGlassHover,
   type GlassHoverOptions,
@@ -9,7 +9,13 @@ import LiquidGlassFilter from "./LiquidGlassFilter.vue";
 const props = withDefaults(
   defineProps<{
     label?: string;
-    size?: "xSmall" | "small" | "medium" | "large";
+    size?:
+      | "xSmall"
+      | "small"
+      | "medium"
+      | "large"
+      | "navBar"
+      | "xLarge";
     variant?: "default" | "primary";
     disabled?: boolean;
     width?: number;
@@ -81,11 +87,14 @@ const sizePresets = {
   small: { height: 36, fontSize: 14 },
   medium: { height: 40, fontSize: 15 },
   large: { height: 44, fontSize: 16 },
+  /** Matches a 3.625rem nav bar at 16px root (58px) */
+  navBar: { height: 58, fontSize: 14 },
+  xLarge: { height: 62, fontSize: 18 },
 };
 
 const pressed = ref(false);
 const buttonRef = ref<HTMLButtonElement | null>(null);
-const filterId = `lg-button-${Math.random().toString(36).substring(2, 9)}`;
+const filterId = `lg-button-${useId()}`;
 const { hoverStyle, hoverProgress } = useGlassHover(
   buttonRef,
   props.hoverLightOptions,
@@ -104,24 +113,30 @@ const scaleRatio = computed(() =>
     ? props.refractionLevel + props.pressedRefractionBoost
     : props.refractionLevel,
 );
-const resolvedBlur = computed(() => (isPrimary.value ? props.blur + 2.2 : props.blur));
+const isPrimary = computed(() => props.variant === "primary");
+const resolvedBlur = computed(() =>
+  isPrimary.value ? props.blur + 2.2 : props.blur,
+);
 const resolvedScaleRatio = computed(() =>
   isPrimary.value ? scaleRatio.value * 0.58 : scaleRatio.value,
 );
 const resolvedSpecularOpacity = computed(() =>
-  isPrimary.value ? Math.min(props.specularOpacity, 0.26) : props.specularOpacity,
+  isPrimary.value
+    ? Math.min(props.specularOpacity, 0.26)
+    : props.specularOpacity,
 );
 const resolvedSpecularSaturation = computed(() =>
   isPrimary.value ? props.specularSaturation + 12 : props.specularSaturation,
 );
-const isPrimary = computed(() => props.variant === "primary");
 const resolvedBorderColor = computed(() =>
   isPrimary.value
     ? "var(--lg-button-primary-border, rgba(3, 119, 247, 0.75))"
     : props.borderColor,
 );
 const resolvedTextColor = computed(() =>
-  isPrimary.value ? "var(--lg-button-primary-text, rgba(255, 255, 255, 0.98))" : props.textColor,
+  isPrimary.value
+    ? "var(--lg-button-primary-text, rgba(255, 255, 255, 0.98))"
+    : props.textColor,
 );
 const resolvedBackgroundColor = computed(() =>
   isPrimary.value

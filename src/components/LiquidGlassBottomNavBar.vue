@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue";
+import { computed, onMounted, onUnmounted, ref, watch, useId } from "vue";
 import {
   useGlassHover,
   type GlassHoverOptions,
@@ -239,8 +239,8 @@ const thumbScale = computed(
 );
 const thumbBackgroundOpacity = computed(() => 1 - 0.9 * pressProgress.value);
 
-const trackFilterId = `lg-nav-track-${Math.random().toString(36).slice(2, 9)}`;
-const thumbFilterId = `lg-nav-thumb-${Math.random().toString(36).slice(2, 9)}`;
+const trackFilterId = `lg-nav-track-${useId()}`;
+const thumbFilterId = `lg-nav-thumb-${useId()}`;
 
 const setActive = (id: string) => {
   if (props.disabled || id === props.modelValue) return;

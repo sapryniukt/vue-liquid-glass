@@ -5,6 +5,7 @@ import {
   onMounted,
   onUnmounted,
   computed,
+  useId,
   type Ref,
   type CSSProperties,
 } from 'vue'
@@ -13,7 +14,7 @@ import { calculateDisplacementMap, calculateDisplacementMap2D, calculateDisplace
 import { calculateSpecularMap } from '../lib/specular'
 import { calculateMagnifyingMap } from '../lib/magnifyingDisplacement'
 import { CONVEX, CONVEX_CIRCLE, CONCAVE, LIP } from '../lib/surfaceEquations'
-import { imageDataToDataUrl, generateFilterId } from '../lib/utils'
+import { imageDataToDataUrl } from '../lib/utils'
 
 export interface UseLiquidGlassOptions {
   width?: Ref<number> | number
@@ -65,7 +66,7 @@ export function useLiquidGlass(
   elementRef?: Ref<HTMLElement | null>,
   options: UseLiquidGlassOptions = {}
 ) {
-  const filterId = generateFilterId()
+  const filterId = `liquid-glass-${useId()}`
 
   const assets = reactive<GlassFilterAssets>({
     displacementMapUrl: '',

@@ -6,6 +6,7 @@ import {
   onUnmounted,
   nextTick,
   watch,
+  useId,
   type CSSProperties,
 } from "vue";
 import {
@@ -132,8 +133,8 @@ const iconSize = computed(() => dimensions.value.iconSize);
 const gap = computed(() => dimensions.value.gap);
 const fontSize = computed(() => dimensions.value.fontSize);
 
-const orbFilterId = `lg-search-orb-${Math.random().toString(36).substring(2, 9)}`;
-const inputFilterId = `lg-search-input-${Math.random().toString(36).substring(2, 9)}`;
+const orbFilterId = `lg-search-orb-${useId()}`;
+const inputFilterId = `lg-search-input-${useId()}`;
 
 const query = computed({
   get: () => props.modelValue,

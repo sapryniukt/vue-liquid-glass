@@ -5,6 +5,7 @@ import {
   onMounted,
   onUnmounted,
   nextTick,
+  useId,
   type CSSProperties,
 } from "vue";
 import type { BezelType, ShapeType } from "../types";
@@ -45,7 +46,6 @@ interface Props {
   disabled?: boolean;
   hoverLight?: boolean;
   hoverLightOptions?: GlassHoverOptions;
-  class?: any;
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -75,7 +75,7 @@ const props = withDefaults(defineProps<Props>(), {
   centerBlurAmount: 3,
   hoverRefractiveBoost: 0.12,
   disabled: false,
-  hoverLight: true,
+  hoverLight: false,
 });
 
 const containerRef = ref<HTMLElement | null>(null);
@@ -87,7 +87,7 @@ const panelWidth = ref(300);
 const panelHeight = ref(200);
 const hasMeasuredPanel = ref(false);
 
-const filterId = `lg-panel-${Math.random().toString(36).substring(2, 8)}`;
+const filterId = `lg-panel-${useId()}`;
 
 let resizeObserver: ResizeObserver | null = null;
 
@@ -132,6 +132,9 @@ const hoverRefractiveIndex = computed(
 
 const innerInset = computed(() => Math.max(props.gradientBlurSize - 20, 20));
 const rootStyle = computed<CSSProperties>(() => ({
+  position: "relative",
+  width: "100%",
+  height: "100%",
   overflow: "hidden",
   borderRadius: `${radius.value}px`,
   border: `${props.borderWidth}px solid ${props.borderColor}`,
@@ -165,18 +168,18 @@ const hoverOverlayStyle = computed<CSSProperties>(() => ({
   zIndex: 50,
 }));
 const contentStyle = computed<CSSProperties>(() => ({
-  position: "relative",
+  position: "absolute",
+  inset: "0",
+  boxSizing: "border-box",
   zIndex: 99,
   padding: props.contentPadding,
-  width: "100%",
-  height: "100%",
   overflowX: "hidden",
   overflowY: props.contentOverflowY,
 }));
 </script>
 
 <template>
-  <div ref="containerRef" :class="['lg-panel-root', props.class]" :style="rootStyle">
+  <div ref="containerRef" :style="rootStyle">
     <!-- SVG filter definition -->
     <LiquidGlassFilter
       v-if="hasMeasuredPanel"
@@ -204,14 +207,16 @@ const contentStyle = computed<CSSProperties>(() => ({
     <!-- Glass background with refraction filter -->
     <div :style="glassStyle" />
 
-    <!-- Progressive gradient blur edges -->
-    <GradientBlur direction="top" :size="gradientBlurSize" />
-    <GradientBlur direction="bottom" :size="gradientBlurSize" />
-    <GradientBlur direction="left" :size="gradientBlurSize" />
-    <GradientBlur direction="right" :size="gradientBlurSize" />
+    <!-- Progressive gradient blur edges. Size 0 still mounts 32 backdrop layers. -->
+    <template v-if="gradientBlurSize > 0">
+      <GradientBlur direction="top" :size="gradientBlurSize" />
+      <GradientBlur direction="bottom" :size="gradientBlurSize" />
+      <GradientBlur direction="left" :size="gradientBlurSize" />
+      <GradientBlur direction="right" :size="gradientBlurSize" />
+    </template>
 
     <!-- Center backdrop blur (between gradient-blur edges) -->
-    <div :style="centerBlurStyle" />
+    <div v-if="centerBlurAmount > 0" :style="centerBlurStyle" />
 
     <!-- Hover light overlay -->
     <div v-if="hoverLight" :style="hoverOverlayStyle" />
@@ -222,11 +227,3 @@ const contentStyle = computed<CSSProperties>(() => ({
     </div>
   </div>
 </template>
-
-<style scoped>
-.lg-panel-root {
-  position: relative;
-  width: 100%;
-  height: 100%;
-}
-</style>

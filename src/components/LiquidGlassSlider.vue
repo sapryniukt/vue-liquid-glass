@@ -6,6 +6,7 @@ import {
   onUnmounted,
   watch,
   nextTick,
+  useId,
   type CSSProperties,
 } from "vue";
 import {
@@ -133,8 +134,8 @@ const thumbRadius = computed(() => dimensions.value.thumbRadius);
 const bezelWidth = computed(() => dimensions.value.bezelWidth);
 const glassThickness = computed(() => dimensions.value.glassThickness);
 
-const filterId = `lg-slider-${Math.random().toString(36).substring(2, 9)}`;
-const trackFilterId = `lg-slider-track-${Math.random().toString(36).substring(2, 9)}`;
+const filterId = `lg-slider-${useId()}`;
+const trackFilterId = `lg-slider-track-${useId()}`;
 const { hoverStyle: sliderHoverStyle, hoverProgress: sliderHoverProgress } =
   useGlassHover(trackRef, props.hoverLightOptions);
 

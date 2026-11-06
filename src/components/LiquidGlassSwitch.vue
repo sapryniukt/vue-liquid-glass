@@ -5,6 +5,7 @@ import {
   onMounted,
   onUnmounted,
   watch,
+  useId,
   type CSSProperties,
 } from "vue";
 import {
@@ -127,8 +128,8 @@ const bezelWidth = computed(() => dimensions.value.bezelWidth);
 const glassThickness = computed(() => dimensions.value.glassThickness);
 
 const trackRef = ref<HTMLElement | null>(null);
-const filterId = `lg-switch-${Math.random().toString(36).substring(2, 9)}`;
-const trackFilterId = `lg-switch-track-${Math.random().toString(36).substring(2, 9)}`;
+const filterId = `lg-switch-${useId()}`;
+const trackFilterId = `lg-switch-track-${useId()}`;
 const { hoverStyle: switchHoverStyle, hoverProgress: switchHoverProgress } =
   useGlassHover(trackRef, props.hoverLightOptions);
 

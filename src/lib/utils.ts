@@ -12,7 +12,12 @@ export function getDevicePixelRatio(override?: number): number {
   return override ?? (typeof window !== 'undefined' ? window.devicePixelRatio ?? 1 : 1)
 }
 
-let idCounter = 0
-export function generateFilterId(prefix = 'liquid-glass'): string {
-  return `${prefix}-${++idCounter}-${Math.random().toString(36).substring(2, 8)}`
+let idCounter = 0;
+
+/**
+ * SSR-unsafe for IDs embedded in HTML; prefer `useId()` from Vue in components.
+ * Kept for backwards compatibility with deterministic counter-only suffix.
+ */
+export function generateFilterId(prefix = "liquid-glass"): string {
+  return `${prefix}-${++idCounter}`;
 }
