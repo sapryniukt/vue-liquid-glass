@@ -75,6 +75,9 @@ const scrollDisplacementMapUrl = ref('')
 const specularMapUrl = ref('')
 const magnifyingMapUrl = ref('')
 const maxDisplacement = ref(0)
+const drawnWidth = ref(Math.max(1, props.width ?? 150))
+const drawnHeight = ref(Math.max(1, props.height ?? 150))
+let mapPublishToken = 0
 const scrolling = useDocumentScrolling()
 
 const MIN_DIMENSION = 1
@@ -102,6 +105,32 @@ const clearRegenerateTimeout = () => {
   regenerateTimeout = null
 }
 
+function publishDisplacementMap(
+  url: string,
+  max: number,
+  width: number,
+  height: number,
+  specularUrl: string | null,
+) {
+  const token = ++mapPublishToken
+  const apply = () => {
+    if (token !== mapPublishToken) return
+    displacementMapUrl.value = url
+    maxDisplacement.value = max
+    drawnWidth.value = width
+    drawnHeight.value = height
+    if (specularUrl) specularMapUrl.value = specularUrl
+  }
+  if (!displacementMapUrl.value) {
+    apply()
+    return
+  }
+  const image = new Image()
+  image.onload = apply
+  image.onerror = apply
+  image.src = url
+}
+
 function getSurfaceFn(bezelType: BezelType) {
   switch (bezelType) {
     case 'convex_circle': return CONVEX_CIRCLE.fn
@@ -110,6 +139,17 @@ function getSurfaceFn(bezelType: BezelType) {
     case 'lip': return LIP.fn
     default: return CONVEX.fn
   }
+}
+
+function nextSpecularUrl(width: number, height: number, bezel: number) {
+  const specKey = specularKey(width, height, bezel)
+  if (specKey === bakedSpecular) return null
+  bakedSpecular = specKey
+  return cachedImageDataUrl(`spec|${specKey}`, () => calculateSpecularMap(
+    width, height,
+    props.radius, bezel,
+    props.specularAngle, props.quality
+  ))
 }
 
 function effectiveBezel(width: number, height: number) {
@@ -159,7 +199,7 @@ function regenerateAssets() {
     maxDisplacement.value = reusedDisplacementMax(peakDisplacement(bakedProfile), precomputedMap)
   } else {
     const displacementKey = `disp|${geometry}|${props.refractiveIndex}`
-    displacementMapUrl.value = cachedImageDataUrl(displacementKey, () => {
+    const nextUrl = cachedImageDataUrl(displacementKey, () => {
       if (props.shape && props.shape !== 'circle') {
         return calculateDisplacementMapWithShape(
           width, height, width, height,
@@ -175,7 +215,13 @@ function regenerateAssets() {
     })
     bakedProfile = precomputedMap
     bakedGeometry = geometry
-    maxDisplacement.value = displacementScaleMax(precomputedMap)
+    publishDisplacementMap(
+      nextUrl,
+      displacementScaleMax(precomputedMap),
+      width,
+      height,
+      nextSpecularUrl(width, height, bezel),
+    )
     scrollDisplacementMapUrl.value = ''
     scheduleScrollMap(width, height, bezel, precomputedMap)
   }
@@ -331,7 +377,7 @@ const specularSaturationValue = computed(() => props.specularSaturation.toString
           <feImage
             :href="magnifyingMapUrl"
             x="0" y="0"
-            :width="width" :height="height"
+            :width="drawnWidth" :height="drawnHeight"
             result="magnifying_displacement_map"
           />
           <feDisplacementMap
@@ -356,7 +402,7 @@ const specularSaturationValue = computed(() => props.specularSaturation.toString
           v-if="activeDisplacementMapUrl"
           :href="activeDisplacementMapUrl"
           x="0" y="0"
-          :width="width" :height="height"
+          :width="drawnWidth" :height="drawnHeight"
           result="displacement_map"
         />
         <feDisplacementMap
@@ -433,7 +479,7 @@ const specularSaturationValue = computed(() => props.specularSaturation.toString
           v-if="showSpecular"
           :href="specularMapUrl"
           x="0" y="0"
-          :width="width" :height="height"
+          :width="drawnWidth" :height="drawnHeight"
           result="specular_layer"
         />
         <template v-if="showSpecular">

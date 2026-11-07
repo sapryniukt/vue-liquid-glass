@@ -96,20 +96,19 @@ let resizeObserver: ResizeObserver | null = null;
 onMounted(() => {
   nextTick(() => {
     if (!containerRef.value) return;
-    panelWidth.value = containerRef.value.offsetWidth;
-    panelHeight.value = containerRef.value.offsetHeight;
+    panelWidth.value = Math.round(containerRef.value.offsetWidth);
+    panelHeight.value = Math.round(containerRef.value.offsetHeight);
     hasMeasuredPanel.value = panelWidth.value > 0 && panelHeight.value > 0;
 
     resizeObserver = new ResizeObserver((entries) => {
       for (const entry of entries) {
-        panelWidth.value = entry.contentRect.width;
-        panelHeight.value = entry.contentRect.height;
-        if (
-          !hasMeasuredPanel.value &&
-          panelWidth.value > 0 &&
-          panelHeight.value > 0
-        ) {
-          hasMeasuredPanel.value = true;
+        const nextWidth = Math.round(entry.contentRect.width)
+        const nextHeight = Math.round(entry.contentRect.height)
+        if (nextWidth === panelWidth.value && nextHeight === panelHeight.value) continue
+        panelWidth.value = nextWidth
+        panelHeight.value = nextHeight
+        if (!hasMeasuredPanel.value && nextWidth > 0 && nextHeight > 0) {
+          hasMeasuredPanel.value = true
         }
       }
     });
