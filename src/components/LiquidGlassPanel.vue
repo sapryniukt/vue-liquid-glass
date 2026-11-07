@@ -4,7 +4,7 @@ import {
   computed,
   onMounted,
   onUnmounted,
-  nextTick,
+  getCurrentInstance,
   useId,
   type CSSProperties,
 } from "vue";
@@ -81,6 +81,13 @@ const props = withDefaults(defineProps<Props>(), {
 });
 
 const containerRef = ref<HTMLElement | null>(null);
+const instance = getCurrentInstance();
+
+function panelElement() {
+  if (containerRef.value instanceof HTMLElement) return containerRef.value;
+  const el = instance?.vnode.el;
+  return el instanceof HTMLElement ? el : null;
+}
 const { hoverStyle, hoverProgress } = useGlassHover(
   containerRef,
   props.hoverLightOptions,
@@ -94,26 +101,26 @@ const filterId = `lg-panel-${useId()}`;
 let resizeObserver: ResizeObserver | null = null;
 
 onMounted(() => {
-  nextTick(() => {
-    if (!containerRef.value) return;
-    panelWidth.value = Math.round(containerRef.value.offsetWidth);
-    panelHeight.value = Math.round(containerRef.value.offsetHeight);
-    hasMeasuredPanel.value = panelWidth.value > 0 && panelHeight.value > 0;
+  const el = panelElement();
+  if (!el) return;
+  containerRef.value = el;
+  panelWidth.value = Math.round(el.offsetWidth);
+  panelHeight.value = Math.round(el.offsetHeight);
+  hasMeasuredPanel.value = panelWidth.value > 0 && panelHeight.value > 0;
 
-    resizeObserver = new ResizeObserver((entries) => {
-      for (const entry of entries) {
-        const nextWidth = Math.round(entry.contentRect.width)
-        const nextHeight = Math.round(entry.contentRect.height)
-        if (nextWidth === panelWidth.value && nextHeight === panelHeight.value) continue
-        panelWidth.value = nextWidth
-        panelHeight.value = nextHeight
-        if (!hasMeasuredPanel.value && nextWidth > 0 && nextHeight > 0) {
-          hasMeasuredPanel.value = true
-        }
+  resizeObserver = new ResizeObserver((entries) => {
+    for (const entry of entries) {
+      const nextWidth = Math.round(entry.contentRect.width);
+      const nextHeight = Math.round(entry.contentRect.height);
+      if (nextWidth === panelWidth.value && nextHeight === panelHeight.value) continue;
+      panelWidth.value = nextWidth;
+      panelHeight.value = nextHeight;
+      if (!hasMeasuredPanel.value && nextWidth > 0 && nextHeight > 0) {
+        hasMeasuredPanel.value = true;
       }
-    });
-    resizeObserver.observe(containerRef.value);
+    }
   });
+  resizeObserver.observe(el);
 });
 
 onUnmounted(() => {
@@ -173,7 +180,6 @@ const contentStyle = computed<CSSProperties>(() => ({
   position: "absolute",
   inset: "0",
   zIndex: 1,
-  isolation: "isolate",
   boxSizing: "border-box",
   borderRadius: `${radius.value}px`,
   padding: props.contentPadding,
