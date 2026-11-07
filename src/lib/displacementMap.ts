@@ -77,13 +77,14 @@ export function calculateDisplacementMap2D(
   const radiusPlusOneSquared = (radius_ + 1) ** 2
   const radiusMinusBezelSquared = (radius_ - bezel) ** 2
 
-  const objectWidth_ = objectWidth * devicePixelRatio
-  const objectHeight_ = objectHeight * devicePixelRatio
+  // Whole pixels: a fractional index into ImageData is silently dropped.
+  const objectWidth_ = Math.min(bufferWidth, Math.round(objectWidth * devicePixelRatio))
+  const objectHeight_ = Math.min(bufferHeight, Math.round(objectHeight * devicePixelRatio))
   const widthBetweenRadiuses = objectWidth_ - radius_ * 2
   const heightBetweenRadiuses = objectHeight_ - radius_ * 2
 
-  const objectX = (bufferWidth - objectWidth_) / 2
-  const objectY = (bufferHeight - objectHeight_) / 2
+  const objectX = Math.floor((bufferWidth - objectWidth_) / 2)
+  const objectY = Math.floor((bufferHeight - objectHeight_) / 2)
 
   for (let y1 = 0; y1 < objectHeight_; y1++) {
     for (let x1 = 0; x1 < objectWidth_; x1++) {
@@ -168,12 +169,13 @@ export function calculateDisplacementMapWithShape(
   const neutral = 0xff008080
   new Uint32Array(imageData.data.buffer).fill(neutral)
 
-  const objectWidth_ = objectWidth * devicePixelRatio
-  const objectHeight_ = objectHeight * devicePixelRatio
+  // Whole pixels: a fractional index into ImageData is silently dropped.
+  const objectWidth_ = Math.min(bufferWidth, Math.round(objectWidth * devicePixelRatio))
+  const objectHeight_ = Math.min(bufferHeight, Math.round(objectHeight * devicePixelRatio))
   const bezel = bezelWidth * devicePixelRatio
 
-  const objectX = (bufferWidth - objectWidth_) / 2
-  const objectY = (bufferHeight - objectHeight_) / 2
+  const objectX = Math.floor((bufferWidth - objectWidth_) / 2)
+  const objectY = Math.floor((bufferHeight - objectHeight_) / 2)
 
   const maxCornerRadius = Math.min(objectWidth_, objectHeight_) / 2
   let actualRadius: number

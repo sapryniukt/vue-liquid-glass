@@ -184,6 +184,18 @@ const buttonStyle = computed<CSSProperties>(() => ({
   boxShadow: pressed.value ? resolvedShadowPressed.value : resolvedShadow.value,
 }));
 
+// Keep the highlight out of the SVG filter: filter primitives re-run on every scroll frame.
+const specularUrl = ref("");
+const specularStyle = computed<CSSProperties>(() => ({
+  position: "absolute",
+  inset: "0",
+  borderRadius: `${radius.value}px`,
+  pointerEvents: "none",
+  backgroundImage: `url(${specularUrl.value})`,
+  backgroundSize: "100% 100%",
+  opacity: resolvedSpecularOpacity.value,
+}));
+
 const handlePointerDown = () => {
   if (props.disabled) return;
   pressed.value = true;
@@ -222,6 +234,8 @@ const handleClick = (event: MouseEvent) => {
       :specular-opacity="resolvedSpecularOpacity"
       :specular-saturation="resolvedSpecularSaturation"
       :scroll-fast="scrollFast"
+      :inline-specular="false"
+      @specular="specularUrl = $event"
     />
 
     <button
@@ -236,6 +250,7 @@ const handleClick = (event: MouseEvent) => {
       @pointerleave="handlePointerUp"
       @click="handleClick"
     >
+      <div v-if="specularUrl && resolvedSpecularOpacity > 0" :style="specularStyle" />
       <div
         v-if="hoverLight"
         :style="{

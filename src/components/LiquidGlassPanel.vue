@@ -138,11 +138,72 @@ const hoverRefractiveIndex = computed(
     props.refractiveIndex + hoverProgress.value * props.hoverRefractiveBoost,
 );
 
+// Backdrop filters cost per frame by area and the map is neutral inside the bezel,
+// so large panels only filter an edge ring and paint the middle as plain tint.
+const RING_MIN_AREA = 100_000;
+const RING_MARGIN = 4;
+const ring = computed(() => {
+  const w = panelWidth.value;
+  const h = panelHeight.value;
+  if (w * h < RING_MIN_AREA) return null;
+  const bezel = Math.min(
+    Math.max(2, Math.min(w, h) / 2 - 1),
+    Math.max(1, props.bezelWidth * 1.22),
+  );
+  const edge = Math.ceil(Math.max(radius.value, bezel) + RING_MARGIN);
+  const side = Math.ceil(bezel + RING_MARGIN);
+  if (edge * 2 >= h || side * 2 >= w) return null;
+  return { w, h, edge, side };
+});
+const ringRegions = computed(() => {
+  const r = ring.value;
+  if (!r) return undefined;
+  return [
+    { id: `${filterId}-t`, x: 0, y: 0 },
+    { id: `${filterId}-b`, x: 0, y: r.h - r.edge },
+    { id: `${filterId}-l`, x: 0, y: r.edge },
+    { id: `${filterId}-r`, x: r.w - r.side, y: r.edge },
+  ];
+});
+const ringStyles = computed<CSSProperties[]>(() => {
+  const r = ring.value;
+  if (!r) return [];
+  const edge = `${r.edge}px`;
+  const side = `${r.side}px`;
+  const corner = `${radius.value}px`;
+  const tint = {
+    position: "absolute" as const,
+    backgroundColor: props.backgroundColor,
+    opacity: props.backgroundOpacity,
+  };
+  const glass = (id: string) => ({
+    ...tint,
+    backdropFilter: `url(#${id})`,
+    WebkitBackdropFilter: `url(#${id})`,
+  });
+  return [
+    { ...glass(`${filterId}-t`), left: 0, right: 0, top: 0, height: edge, borderTopLeftRadius: corner, borderTopRightRadius: corner },
+    { ...glass(`${filterId}-b`), left: 0, right: 0, bottom: 0, height: edge, borderBottomLeftRadius: corner, borderBottomRightRadius: corner },
+    { ...glass(`${filterId}-l`), left: 0, top: edge, bottom: edge, width: side },
+    { ...glass(`${filterId}-r`), right: 0, top: edge, bottom: edge, width: side },
+    { ...tint, left: side, right: side, top: edge, bottom: edge },
+  ];
+});
+const ringShadowStyle = computed<CSSProperties>(() => ({
+  position: "absolute",
+  inset: "0",
+  borderRadius: `${radius.value}px`,
+  pointerEvents: "none",
+  opacity: props.backgroundOpacity,
+  boxShadow: props.shadow,
+}));
+
 const innerInset = computed(() => Math.max(props.gradientBlurSize - 20, 20));
 const rootStyle = computed<CSSProperties>(() => ({
   position: "relative",
   width: "100%",
   height: "100%",
+  overflow: "hidden",
   borderRadius: `${radius.value}px`,
   border: `${props.borderWidth}px solid ${props.borderColor}`,
   opacity: props.disabled ? 0.5 : 1,
@@ -152,14 +213,23 @@ const rootStyle = computed<CSSProperties>(() => ({
 const glassStyle = computed<CSSProperties>(() => ({
   position: "absolute",
   inset: "0",
-  zIndex: 0,
   borderRadius: `${radius.value}px`,
-  overflow: "hidden",
   backdropFilter: `url(#${filterId})`,
   WebkitBackdropFilter: `url(#${filterId})`,
   backgroundColor: props.backgroundColor,
   opacity: props.backgroundOpacity,
   boxShadow: props.shadow,
+}));
+// Keep the highlight out of the SVG filter: filter primitives re-run on every scroll frame.
+const specularUrl = ref("");
+const specularStyle = computed<CSSProperties>(() => ({
+  position: "absolute",
+  inset: "0",
+  borderRadius: `${radius.value}px`,
+  pointerEvents: "none",
+  backgroundImage: `url(${specularUrl.value})`,
+  backgroundSize: "100% 100%",
+  opacity: props.specularOpacity * props.backgroundOpacity,
 }));
 const centerBlurStyle = computed<CSSProperties>(() => ({
   position: "absolute",
@@ -179,9 +249,8 @@ const hoverOverlayStyle = computed<CSSProperties>(() => ({
 const contentStyle = computed<CSSProperties>(() => ({
   position: "absolute",
   inset: "0",
-  zIndex: 1,
   boxSizing: "border-box",
-  borderRadius: `${radius.value}px`,
+  zIndex: 99,
   padding: props.contentPadding,
   overflowX: "hidden",
   overflowY: props.contentOverflowY,
@@ -213,10 +282,18 @@ const contentStyle = computed<CSSProperties>(() => ({
       :magnify="magnify"
       :magnifying-scale="magnifyingScale"
       :scroll-fast="scrollFast"
+      :inline-specular="false"
+      :regions="ringRegions"
+      @specular="specularUrl = $event"
     />
 
     <!-- Glass background with refraction filter -->
-    <div :style="glassStyle" />
+    <template v-if="ring">
+      <div v-for="(style, i) in ringStyles" :key="i" :style="style" />
+      <div v-if="shadow !== 'none'" :style="ringShadowStyle" />
+    </template>
+    <div v-else :style="glassStyle" />
+    <div v-if="specularUrl && specularOpacity > 0" :style="specularStyle" />
 
     <!-- Progressive gradient blur edges. Size 0 still mounts 32 backdrop layers. -->
     <template v-if="gradientBlurSize > 0">
