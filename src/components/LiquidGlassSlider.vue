@@ -21,6 +21,7 @@ const props = withDefaults(
     min?: number;
     max?: number;
     size?: "small" | "medium" | "large";
+    trackHeight?: number;
     disabled?: boolean;
     // Interaction tuning
     restScale?: number;
@@ -54,6 +55,7 @@ const props = withDefaults(
     initialContainerWidth?: number;
     hoverLight?: boolean;
     hoverLightOptions?: GlassHoverOptions;
+    scrollFast?: boolean;
   }>(),
   {
     modelValue: 0,
@@ -87,6 +89,7 @@ const props = withDefaults(
     trackSpecularSaturationBoost: 3,
     initialContainerWidth: 300,
     hoverLight: true,
+    scrollFast: true,
   },
 );
 
@@ -127,7 +130,9 @@ const containerWidth = ref(props.initialContainerWidth);
 
 const dimensions = computed(() => sizePresets[props.size]);
 const sliderWidth = computed(() => containerWidth.value);
-const sliderHeight = computed(() => dimensions.value.sliderHeight);
+const sliderHeight = computed(
+  () => props.trackHeight ?? dimensions.value.sliderHeight,
+);
 const thumbWidth = computed(() => dimensions.value.thumbWidth);
 const thumbHeight = computed(() => dimensions.value.thumbHeight);
 const thumbRadius = computed(() => dimensions.value.thumbRadius);
@@ -357,6 +362,7 @@ const fillMaskStyle = computed<CSSProperties>(() => ({
         :scale-ratio="trackScaleRatioBoosted"
         :specular-opacity="trackFilterSpecularOpacity"
         :specular-saturation="trackFilterSpecularSaturation + trackSpecularSaturationBoost"
+        :scroll-fast="scrollFast"
       />
 
       <div :style="trackGlassStyle" />
@@ -389,6 +395,7 @@ const fillMaskStyle = computed<CSSProperties>(() => ({
       :scale-ratio="thumbScaleRatioBoosted"
       :specular-opacity="thumbFilterSpecularOpacity"
       :specular-saturation="thumbFilterSpecularSaturation + thumbFilterSpecularSaturationBoost"
+      :scroll-fast="scrollFast"
     />
 
     <!-- Thumb -->

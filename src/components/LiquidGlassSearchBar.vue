@@ -38,13 +38,14 @@ const props = withDefaults(
     orbRefractiveIndex?: number;
     hoverLight?: boolean;
     hoverLightOptions?: GlassHoverOptions;
+    scrollFast?: boolean;
   }>(),
   {
     modelValue: "",
     placeholder: "Search...",
     size: "medium",
     disabled: false,
-    clearButtonGap: 18,
+    clearButtonGap: 10,
     expandScale: 1.02,
     inputScaleMin: 0.7,
     inputFilterBlur: 2,
@@ -60,6 +61,7 @@ const props = withDefaults(
     inputRefractiveIndex: 1.45,
     orbRefractiveIndex: 1.4,
     hoverLight: true,
+    scrollFast: true,
   },
 );
 
@@ -169,22 +171,27 @@ const orbScale = computed(() =>
 );
 const orbOpacity = computed(() => (showCloseOrb.value ? 1 : 0));
 const orbRightInset = computed(() => (height.value - orbSize.value) / 2);
-const reservedRightSpace = computed(() =>
+const orbGrow = computed(() =>
   showCloseOrb.value
-    ? orbSize.value + orbRightInset.value + props.clearButtonGap
+    ? (orbSize.value * Math.max(0, props.orbActiveScale - 1)) / 2
     : 0,
 );
-const effectiveReservedRightSpace = computed(() =>
-  hasMeasuredInputWidth.value ? reservedRightSpace.value : 0,
+const clearSlot = computed(
+  () =>
+    orbSize.value +
+    orbRightInset.value +
+    props.clearButtonGap +
+    (orbSize.value * Math.max(0, props.orbActiveScale - 1)),
 );
-const glassScaleX = computed(() => {
-  const w = inputWidth.value || 1;
-  return Math.max(
-    props.inputScaleMin,
-    (w - effectiveReservedRightSpace.value) / w,
-  );
-});
-const contentRightInset = computed(() => effectiveReservedRightSpace.value);
+// Shorten the pill when the clear control is out, so the gap is empty glass,
+// not a squashed scaleX of the same lens.
+const reservedRight = computed(() =>
+  showCloseOrb.value && hasMeasuredInputWidth.value ? clearSlot.value : 0,
+);
+const glassWidth = computed(() =>
+  Math.max(height.value, (inputWidth.value || 1) - reservedRight.value),
+);
+const contentRightInset = computed(() => reservedRight.value);
 const inputGlassReady = computed(
   () => hasMeasuredInputWidth.value && inputWidth.value > 0,
 );
@@ -207,16 +214,16 @@ const inputContainerStyle = computed<CSSProperties>(() => ({
   transition: "transform 260ms cubic-bezier(0.22,1,0.36,1)",
   transform: `scale(${isExpanded.value ? props.expandScale : 1})`,
   transformOrigin: "center center",
-  willChange: "transform",
 }));
 
 const inputGlassStyle = computed<CSSProperties>(() => ({
   position: "absolute",
-  inset: "0",
+  top: "0",
+  bottom: "0",
+  left: "0",
   zIndex: "0",
-  transition: "all 300ms",
-  transform: `scaleX(${glassScaleX.value})`,
-  transformOrigin: "left center",
+  width: hasMeasuredInputWidth.value ? `${glassWidth.value}px` : "100%",
+  transition: "width 260ms cubic-bezier(0.22,1,0.36,1)",
   borderRadius: `${radius.value}px`,
   backdropFilter: inputGlassReady.value ? `url(#${inputFilterId})` : "none",
   WebkitBackdropFilter: inputGlassReady.value
@@ -226,7 +233,6 @@ const inputGlassStyle = computed<CSSProperties>(() => ({
   boxShadow: isExpanded.value
     ? "var(--lg-search-input-shadow-expanded, 0 4px 24px rgba(0,0,0,0.1))"
     : "var(--lg-search-input-shadow, 0 2px 10px rgba(0,0,0,0.05))",
-  willChange: "transform",
 }));
 
 const inputContentStyle = computed<CSSProperties>(() => ({
@@ -251,7 +257,7 @@ const orbButtonStyle = computed<CSSProperties>(() => ({
   overflow: "hidden",
   appearance: "none",
   WebkitAppearance: "none",
-  right: `${orbRightInset.value}px`,
+  right: `${orbRightInset.value + orbGrow.value}px`,
   top: "50%",
   width: `${orbSize.value}px`,
   height: `${orbSize.value}px`,
@@ -335,7 +341,7 @@ const clearSearch = () => {
       <LiquidGlassFilter
         v-if="inputGlassReady"
         :id="inputFilterId"
-        :width="inputWidth"
+        :width="glassWidth"
         :height="height"
         :radius="radius"
         :bezel-width="dimensions.bezelWidth"
@@ -347,6 +353,7 @@ const clearSearch = () => {
         :scale-ratio="inputFilterScaleRatio"
         :specular-opacity="inputSpecularOpacity"
         :specular-saturation="inputSpecularSaturation"
+        :scroll-fast="scrollFast"
       />
 
       <div :style="inputGlassStyle" />
@@ -356,13 +363,11 @@ const clearSearch = () => {
         v-if="hoverLight"
         :style="{
           ...searchHoverStyle,
+          inset: '0',
+          right: `${reservedRight}px`,
           borderRadius: `${radius}px`,
           overflow: 'hidden',
           zIndex: '5',
-          transform: `scaleX(${glassScaleX})`,
-          transformOrigin: 'left center',
-          transition: 'transform 300ms',
-          willChange: 'transform',
         }"
       />
 
@@ -371,14 +376,14 @@ const clearSearch = () => {
         v-if="hoverLight && focused && !isSearchHovering"
         :style="{
           position: 'absolute',
-          inset: '0',
+          top: '0',
+          bottom: '0',
+          left: '0',
+          right: `${reservedRight}px`,
           zIndex: '4',
           borderRadius: `${radius}px`,
           overflow: 'hidden',
-          transform: `scaleX(${glassScaleX})`,
-          transformOrigin: 'left center',
-          transition: 'transform 300ms, opacity 200ms',
-          willChange: 'transform',
+          transition: 'opacity 200ms',
           pointerEvents: 'none',
           background:
             'linear-gradient(rgba(255,255,255,0.06), rgba(255,255,255,0.06))',
@@ -427,14 +432,13 @@ const clearSearch = () => {
             color: 'var(--lg-search-text, rgba(255,255,255,0.92))',
             fontWeight: '500',
             fontSize: `${fontSize}px`,
-            paddingRight: showCloseOrb ? `${orbSize + gap}px` : `${radius}px`,
+            paddingRight: `${radius}px`,
             transition: 'padding 300ms',
           }"
           @focus="handleFocus"
           @blur="handleBlur"
         />
       </div>
-    </div>
 
     <button
       type="button"
@@ -460,6 +464,7 @@ const clearSearch = () => {
         :scale-ratio="orbFilterScaleRatio"
         :specular-opacity="orbSpecularOpacity"
         :specular-saturation="orbSpecularSaturation"
+        :scroll-fast="scrollFast"
       />
 
       <div
@@ -529,6 +534,7 @@ const clearSearch = () => {
         </svg>
       </div>
     </button>
+    </div>
   </div>
 </template>
 

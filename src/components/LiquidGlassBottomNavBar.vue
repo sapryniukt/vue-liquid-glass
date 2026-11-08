@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch, useId } from "vue";
+import { computed, nextTick, onMounted, onUnmounted, ref, watch, useId } from "vue";
 import {
   useGlassHover,
   type GlassHoverOptions,
@@ -16,11 +16,12 @@ const props = withDefaults(
   defineProps<{
     modelValue?: string;
     items: NavItem[];
-    size?: "small" | "medium" | "large";
+    size?: "xs" | "small" | "medium" | "large";
     disabled?: boolean;
     activeColor?: string;
     hoverLight?: boolean;
     hoverLightOptions?: GlassHoverOptions;
+    scrollFast?: boolean;
     itemGap?: number;
     thumbHeightOffset?: number;
     minThumbWidth?: number;
@@ -36,6 +37,7 @@ const props = withDefaults(
     morphMaxSkewDeg?: number;
     labelInactiveOpacity?: number;
     labelActiveScale?: number;
+    activeSuffix?: string;
     trackFilterBezelWidth?: number;
     trackFilterGlassThickness?: number;
     trackFilterRefractiveIndex?: number;
@@ -55,6 +57,7 @@ const props = withDefaults(
     disabled: false,
     activeColor: "var(--lg-nav-active, rgb(3, 119, 247))",
     hoverLight: true,
+    scrollFast: false,
     itemGap: 4,
     thumbHeightOffset: 2,
     minThumbWidth: 44,
@@ -70,6 +73,7 @@ const props = withDefaults(
     morphMaxSkewDeg: 8,
     labelInactiveOpacity: 0.72,
     labelActiveScale: 1.05,
+    activeSuffix: "",
     trackFilterBezelWidth: 12,
     trackFilterGlassThickness: 90,
     trackFilterRefractiveIndex: 1.35,
@@ -90,6 +94,15 @@ const emit = defineEmits<{
 }>();
 
 const sizePresets = {
+  xs: {
+    height: 28,
+    itemWidth: 46,
+    thumbHeight: 24,
+    iconSize: 12,
+    fontSize: 11,
+    bezelWidth: 4,
+    glassThickness: 28,
+  },
   small: {
     height: 44,
     itemWidth: 72,
@@ -148,6 +161,48 @@ const selectedIndex = computed(() => {
   const idx = safeItems.value.findIndex((item) => item.id === props.modelValue);
   return idx >= 0 ? idx : 0;
 });
+const suffixEl = ref<HTMLElement | null>(null);
+let suffixFrom: DOMRect | null = null;
+
+function setSuffixEl(el: unknown) {
+  if (el instanceof HTMLElement) {
+    suffixEl.value = el;
+    return;
+  }
+  if (suffixEl.value && !suffixEl.value.isConnected) suffixEl.value = null;
+}
+
+watch(
+  selectedIndex,
+  () => {
+    suffixFrom = suffixEl.value?.getBoundingClientRect() ?? suffixFrom;
+  },
+  { flush: "pre" },
+);
+
+watch(selectedIndex, async () => {
+  if (!props.activeSuffix) return;
+  await nextTick();
+  const node = suffixEl.value;
+  if (!node) return;
+  const to = node.getBoundingClientRect();
+  const from = suffixFrom;
+  suffixFrom = to;
+  if (!from) return;
+  const dx = from.left - to.left;
+  const dy = from.top - to.top;
+  if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
+  node.style.transition = "none";
+  node.style.transform = `translate(${dx}px, ${dy}px)`;
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      if (!node.isConnected) return;
+      node.style.transition = "transform 460ms cubic-bezier(0.22, 1, 0.36, 1)";
+      node.style.transform = "translate(0, 0)";
+    });
+  });
+});
+
 const targetThumbX = (index: number) => {
   const offset = thumbSideInset.value;
   return index * dims.value.itemWidth + offset;
@@ -163,7 +218,10 @@ const morphScaleY = ref(1);
 const morphSkewDeg = ref(0);
 let pressAnimationFrame: number | null = null;
 let morphAnimationFrame: number | null = null;
+let glideFrame: number | null = null;
 let glassReleaseTimeout: ReturnType<typeof setTimeout> | null = null;
+const gliding = ref(false);
+const coloredId = ref(props.modelValue);
 
 const THUMB_REST_SCALE = computed(() => props.thumbRestScale);
 const THUMB_ACTIVE_SCALE = computed(() => props.thumbActiveScale);
@@ -213,7 +271,7 @@ const animateMorphToRest = () => {
   morphAnimationFrame = requestAnimationFrame(tick);
 };
 
-const animatePressProgressTo = (target: number) => {
+const animatePressProgressTo = (target: number, onDone?: () => void) => {
   stopPressAnimation();
   const tick = () => {
     const current = pressProgress.value;
@@ -222,11 +280,77 @@ const animatePressProgressTo = (target: number) => {
     if (Math.abs(target - next) < 0.001) {
       pressProgress.value = target;
       pressAnimationFrame = null;
+      onDone?.();
       return;
     }
     pressAnimationFrame = requestAnimationFrame(tick);
   };
   pressAnimationFrame = requestAnimationFrame(tick);
+};
+
+const releaseGlass = (index: number) => {
+  clearGlassReleaseTimeout();
+  glassReleaseTimeout = setTimeout(() => {
+    if (pointerDown.value !== 0) return;
+    animatePressProgressTo(0, () => settleColor(index));
+  }, props.releaseDelayMs);
+};
+
+const stopGlide = () => {
+  if (glideFrame !== null) {
+    cancelAnimationFrame(glideFrame);
+    glideFrame = null;
+  }
+  gliding.value = false;
+};
+
+const settleColor = (index: number) => {
+  coloredId.value = safeItems.value[index]?.id ?? coloredId.value;
+};
+
+const glideThumbTo = (index: number) => {
+  stopGlide();
+  stopMorphAnimation();
+  const destination = targetThumbX(index);
+  if (Math.abs(destination - currentThumbX.value) < 0.5) {
+    currentThumbX.value = destination;
+    settleColor(index);
+    return;
+  }
+
+  gliding.value = true;
+  coloredId.value = "";
+  clearGlassReleaseTimeout();
+  animatePressProgressTo(1);
+
+  const tick = () => {
+    if (pointerDown.value !== 0) {
+      stopGlide();
+      return;
+    }
+    const delta = destination - currentThumbX.value;
+    if (Math.abs(delta) < 0.35) {
+      currentThumbX.value = destination;
+      stopGlide();
+      animateMorphToRest();
+      releaseGlass(index);
+      return;
+    }
+    const velocity = delta * 0.28;
+    const speed = Math.min(Math.abs(velocity), props.morphMaxStretch);
+    const stretch = 1 + speed * 0.02;
+    const squash = Math.max(0.84, 1 - (stretch - 1) * 0.65);
+    const tilt = Math.max(
+      -props.morphMaxSkewDeg,
+      Math.min(props.morphMaxSkewDeg, velocity * props.morphSkewFactor),
+    );
+    morphScaleX.value += (stretch - morphScaleX.value) * props.morphLerp;
+    morphScaleY.value += (squash - morphScaleY.value) * props.morphLerp;
+    morphSkewDeg.value += (tilt - morphSkewDeg.value) * props.morphLerp;
+    currentThumbX.value += velocity;
+    glideFrame = requestAnimationFrame(tick);
+  };
+  glideFrame = requestAnimationFrame(tick);
 };
 
 const isActive = computed(
@@ -246,10 +370,6 @@ const setActive = (id: string) => {
   if (props.disabled || id === props.modelValue) return;
   emit("update:modelValue", id);
   animatePressProgressTo(1);
-  clearGlassReleaseTimeout();
-  glassReleaseTimeout = setTimeout(() => {
-    if (pointerDown.value === 0) animatePressProgressTo(0);
-  }, props.releaseDelayMs);
 };
 
 const handleThumbPointerDown = (e: MouseEvent | TouchEvent) => {
@@ -337,19 +457,23 @@ const handlePointerUp = () => {
   index = Math.max(0, Math.min(index, safeItems.value.length - 1));
   const item = safeItems.value[index];
   if (item && item.id !== props.modelValue) emit("update:modelValue", item.id);
+  stopGlide();
   currentThumbX.value = targetThumbX(index);
   animateMorphToRest();
 
-  clearGlassReleaseTimeout();
-  glassReleaseTimeout = setTimeout(() => {
-    if (pointerDown.value === 0) animatePressProgressTo(0);
-  }, props.releaseDelayMs);
+  releaseGlass(index);
 };
 
 watch(
   selectedIndex,
-  (index) => {
-    if (pointerDown.value === 0) currentThumbX.value = targetThumbX(index);
+  (index, previous) => {
+    if (pointerDown.value !== 0) return;
+    if (previous === undefined) {
+      currentThumbX.value = targetThumbX(index);
+      settleColor(index);
+      return;
+    }
+    glideThumbTo(index);
   },
   { immediate: true },
 );
@@ -357,6 +481,7 @@ watch(
 onUnmounted(() => {
   stopPressAnimation();
   stopMorphAnimation();
+  stopGlide();
   clearGlassReleaseTimeout();
   window.removeEventListener("mousemove", handlePointerMove);
   window.removeEventListener("touchmove", handlePointerMove);
@@ -399,6 +524,7 @@ onUnmounted(() => {
         :scale-ratio="trackFilterScaleRatio"
         :specular-opacity="trackFilterSpecularOpacity"
         :specular-saturation="trackFilterSpecularSaturation"
+        :scroll-fast="scrollFast"
       />
 
       <div
@@ -441,6 +567,7 @@ onUnmounted(() => {
         :scale-ratio="thumbFilterScaleRatio"
         :specular-opacity="thumbFilterSpecularOpacity"
         :specular-saturation="thumbFilterSpecularSaturation"
+        :scroll-fast="scrollFast"
       />
 
       <div
@@ -453,8 +580,8 @@ onUnmounted(() => {
           transform: `translateX(${currentThumbX}px) scale(${thumbScale}) scaleX(${morphScaleX}) scaleY(${morphScaleY}) skewX(${morphSkewDeg}deg)`,
           borderRadius: `${thumbRadius}px`,
           transition:
-            pointerDown > 0.5
-              ? 'transform 60ms linear'
+            pointerDown > 0.5 || gliding
+              ? 'transform 60ms linear, background-color 180ms ease, box-shadow 180ms ease'
               : 'transform 460ms cubic-bezier(0.22,1,0.36,1), background-color 240ms ease, box-shadow 240ms ease',
           backdropFilter: `url(#${thumbFilterId})`,
           WebkitBackdropFilter: `url(#${thumbFilterId})`,
@@ -535,7 +662,7 @@ onUnmounted(() => {
               height: `${dims.iconSize}px`,
               display: 'block',
               color:
-                item.id === modelValue
+                item.id === coloredId
                   ? activeColor
                   : 'var(--lg-nav-text, rgba(255,255,255,0.82))',
             }"
@@ -548,12 +675,23 @@ onUnmounted(() => {
               fontWeight: 600,
               whiteSpace: 'nowrap',
               color:
-                item.id === modelValue
+                item.id === coloredId
                   ? activeColor
                   : 'var(--lg-nav-text, rgba(255,255,255,0.82))',
             }"
           >
-            {{ item.label }}
+            {{ item.label }}<span
+              v-if="activeSuffix && item.id === modelValue"
+              :ref="setSuffixEl"
+              :style="{
+                display: 'inline',
+                margin: 0,
+                padding: 0,
+                letterSpacing: 0,
+                font: 'inherit',
+                color: 'inherit',
+              }"
+            >{{ activeSuffix }}</span>
           </span>
         </div>
       </div>
